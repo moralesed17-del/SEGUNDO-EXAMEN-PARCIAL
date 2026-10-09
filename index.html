@@ -649,6 +649,10 @@ function examConfigTabHtml(ex){
       <div><div class="label">Preguntas por estudiante</div><input id="exQPE" class="input" type="number" value="${ex.questionsPerExam}"></div>
       <div><div class="label">Máx. cambios de pestaña permitidos</div><input id="exMaxTab" class="input" type="number" value="${ex.maxTabSwitches}"></div>
     </div>
+    <label style="display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--text);margin-bottom:16px;cursor:pointer;">
+      <input id="exShowScore" type="checkbox" ${ex.showScore!==false ? 'checked' : ''} style="width:16px;height:16px;">
+      Mostrar la nota al estudiante al finalizar el examen
+    </label>
     <div class="label">Jornadas disponibles (separadas por coma)</div>
     <input id="exJornadas" class="input" value="${escapeHtml((ex.jornadas||DEFAULT_JORNADAS).join(', '))}" style="margin-bottom:16px;">
     <button class="btn btn-outline" onclick="saveExamConfig()">Guardar cambios</button>
@@ -891,6 +895,28 @@ function answerAreaHtml(q){
 
 views['student-result'] = () => {
   const r = S.lastResult;
+  if(r.showScore === false){
+    return `
+  <div class="center-screen">
+    <div class="panel" style="padding:30px;width:380px;text-align:center;">
+      <div style="color:${r.disqualified?'var(--red)':'var(--cyan)'};display:flex;justify-content:center;">${r.disqualified?ic.shield:ic.check}</div>
+      <div class="disp" style="font-weight:700;font-size:18px;margin-top:12px;">${r.disqualified ? 'Examen cerrado' : 'Evaluación finalizada'}</div>
+      <div style="color:var(--mutedDim);font-size:12px;margin-top:4px;">${escapeHtml(r.examName)}</div>
+      <div style="text-align:left;margin-top:18px;padding:12px 14px;border:1px solid var(--lineSoft);border-radius:8px;background:var(--panel2);">
+        <div class="label">Nombre</div>
+        <div style="font-size:14px;margin-bottom:10px;">${escapeHtml(r.studentName)}</div>
+        <div class="label">Carné</div>
+        <div class="mono" style="font-size:14px;">${escapeHtml(r.carne)}</div>
+      </div>
+      ${r.disqualifyReason ? `<div style="color:var(--red);font-size:12.5px;margin-top:12px;">${escapeHtml(r.disqualifyReason)}</div>` : ''}
+      <div style="font-size:13px;color:var(--muted);margin-top:16px;line-height:1.5;">
+        Tu examen fue enviado y registrado correctamente. Tu docente te dará a conocer el resultado.
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:16px;" onclick="goLanding()">Volver al inicio</button>
+    </div>
+  </div>
+  `;
+  }
   const pass = r.score>=60 && !r.disqualified;
   return `
   <div class="center-screen">
@@ -1010,6 +1036,7 @@ function saveExamConfig(){
     description: document.getElementById('exDesc').value.trim(),
     questionsPerExam: Number(document.getElementById('exQPE').value) || ex.questionsPerExam,
     maxTabSwitches: Number(document.getElementById('exMaxTab').value),
+    showScore: document.getElementById('exShowScore').checked,
     jornadas: document.getElementById('exJornadas').value.split(',').map(s=>s.trim()).filter(Boolean),
   };
   withLoading('Guardando…', async ()=>{ await updateExamDoc(ex.id, patch); S.exams = await fetchExams(); });
@@ -1554,7 +1581,8 @@ function finishExam(disqualified, reason){
   };
   withLoading('Guardando resultado…', async ()=>{
     await addResultDoc(result);
-    S.lastResult = { id: genId(), ...result };
+    const examDoc = S.exams.find(e=>e.id===result.examId);
+    S.lastResult = { id: genId(), ...result, showScore: examDoc ? examDoc.showScore!==false : true };
     S.screen = 'student-result';
     examSession = null;
   });
